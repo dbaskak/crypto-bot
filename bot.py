@@ -4,15 +4,24 @@ from telebot import types
 import os
 import telebot
 import requests
+import logging
+
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    filename='bot.log',
+                    filemode='w')
+logger = logging.getLogger(__name__)
+
+# contacts_db imports
+from contacts import connect_db, add_contact, get_contacts, delete_contact
 
 load_dotenv()
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-# print(os.getenv('BOT_TOKEN'))
-#
-# if BOT_TOKEN is None:
-#     print("Ошибка: токен бота не определен. Проверьте переменные окружения.")
-#     exit(1)
+
+if BOT_TOKEN is None:
+    print("Ошибка: токен бота не определен. Проверьте переменные окружения.")
+    exit(1)
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -44,30 +53,18 @@ def help(message):
     bot.reply_to(message, "Отправьте команду, и я помогу вам с информацией по ней.")
 
 
-# Rate for Bitcoin
-# def get_crypto_rate(coin_id='bitcoin'):
-#     url = f'https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd'
-#     response = requests.get(url)
-#     data = response.json()
-#     rate = data.get(coin_id, {}).get('usd', 'No data')
-#     return rate
-
-
-# Response on "rate" menu item
-# @bot.message_handler(commands=['rate'])
-# def get_rate(message):
-#     coin_id = 'bitcoin'  # Will parametrize for different currencies rates
-#     rate = get_crypto_rate(coin_id)
-#     response_text = f"Курс {coin_id.capitalize()}: ${rate}"
-#     bot.reply_to(message, response_text)
 
 
 def get_crypto_rate(coin_id='bitcoin', currency='usd'):
     url = f'https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies={currency}'
-    response = requests.get(url)
-    data = response.json()
-    rate = data.get(coin_id, {}).get(currency, 'No data')
-    return rate
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raises error for bad responses
+        data = response.json()
+        rate = data.get(coin_id, {}).get(currency, 'No data')
+        return rate
+    except requests.RequestException as e:
+        return f"Ошибка: {str(e)}"
 
 
 # Response on "rate" menu item - choose the crypto
@@ -103,6 +100,86 @@ def show_rate(call):
 @bot.message_handler(func=lambda msg: True)
 def echo_all(message):
     bot.reply_to(message, message.text)
+
+
+# contacts part
+conn = connect_db()
+
+user_data = {}
+
+
+# User add
+@bot.message_handler(commands=['add_contact'])
+def handle_add_contact(message):
+    user_data[message.from_user.id] = {}
+    bot.reply_to(message, "Введите имя контакта:")
+    bot.register_next_step_handler(message, ask_name, message.from_user.id)
+
+
+# Name request
+def ask_name(message, user_id):
+    if not message.text.isalpha():
+        bot.reply_to(message, "Имя должно содержать только буквы. Пожалуйста, введите имя еще раз:")
+        return bot.register_next_step_handler(message, ask_name, user_id)
+    user_data[user_id]['name'] = message.text
+    bot.reply_to(message, "Введите номер телефона:")
+    bot.register_next_step_handler(message, ask_phone, user_id)
+
+
+# Phone number request
+def ask_phone(message, user_id):
+    if not message.text.isdigit() or len(message.text) != 10:
+        bot.reply_to(message, "Номер телефона должен содержать 10 цифр. Пожалуйста, введите номер телефона еще раз:")
+        return bot.register_next_step_handler(message, ask_phone, user_id)
+    user_data[user_id]['phone'] = message.text
+    bot.reply_to(message, "Введите email:")
+    bot.register_next_step_handler(message, ask_email, user_id)
+
+
+# Email request
+def ask_email(message, user_id):
+    if "@" not in message.text and "." not in message.text:
+        bot.reply_to(message, "Введите корректный email. Пожалуйста, введите email еще раз:")
+        return bot.register_next_step_handler(message, ask_email, user_id)
+    user_data[user_id]['email'] = message.text
+    # Add contact from user_data for the user_id
+    add_contact(user_data[user_id]['name'], user_data[user_id]['phone'], user_data[user_id]['email'], conn)
+    bot.reply_to(message, "Контакт добавлен.")
+    # Clear data
+    del user_data[user_id]
+
+
+@bot.message_handler(commands=['view_contacts'])
+def handle_view_contacts(message):
+    logger.info(f"Пользователь {message.from_user.id} запросил просмотр контактов")
+    try:
+        contacts = get_contacts(conn)
+        if not contacts:
+            bot.reply_to(message, "Список контактов пуст.")
+        else:
+            response = "\n".join(f"{id} - {name}, {phone}, {email}" for id, name, phone, email in contacts)
+            bot.reply_to(message, response)
+    except Exception as e:
+        logger.error("Ошибка при получении контактов: %s", e)
+        bot.reply_to(message, "Не удалось получить список контактов.")
+
+
+@bot.message_handler(commands=['delete_contact'])
+def handle_delete_contact(message):
+    logger.info(f"Пользователь {message.from_user.id} запросил удаление контакта")
+    bot.reply_to(message, "Введите ID контакта, который хотите удалить:")
+    bot.register_next_step_handler(message, perform_contact_deletion)
+
+def perform_contact_deletion(message):
+    try:
+        contact_id = int(message.text)  # Преобразование текста в число
+        delete_contact(contact_id, conn)
+        bot.reply_to(message, "Контакт удалён.")
+    except ValueError:
+        bot.reply_to(message, "ID должен быть числом. Попробуйте еще раз.")
+    except Exception as e:
+        logger.error("Ошибка при удалении контакта: %s", e)
+        bot.reply_to(message, "Не удалось удалить контакт.")
 
 
 bot.infinity_polling()
