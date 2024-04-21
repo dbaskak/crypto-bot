@@ -29,20 +29,20 @@ bot = telebot.TeleBot(BOT_TOKEN)
 # "Sey hello" function
 @bot.message_handler(commands=['start', 'hello'])
 def send_welcome(message):
-    bot.reply_to(message, "Привет! Я ваш crypto-помощник.\n/start\n/help\n/commands\n")
+    bot.reply_to(message, "Привіт! Я ваш crypto-помічник.\n/start\n/help\n/commands\n")
 
 
 # Select the desired menu item
 @bot.message_handler(commands=['commands'])
 def list_commands(message):
     commands = (
-        "/start - Начать работу с ботом\n"
-        "/hello - Приветствие\n"
-        "/rate - Получить текущие курсы криптовалют\n"
-        "/save_contact - Сохранить контакт\n"
-        "/view_contacts - Показать все контакты\n"
-        "/delete_contact - Удалить контакт\n"
-        "/help - Получить справку по командам"
+        "/start - Почати роботу з ботом\n"
+        "/hello - Вітання\n"
+        "/rate - отримати поточні курси криптовалют\n"
+        "/save_contact - Зберегти контакт\n"
+        "/view_contacts - Показати всі контакти\n"
+        "/delete_contact - Видалити контакт\n"
+        "/help - Отримати довідку по командам"
     )
     bot.reply_to(message, commands)
 
@@ -50,21 +50,20 @@ def list_commands(message):
 # Response on "help" menu item
 @bot.message_handler(commands=['help'])
 def help(message):
-    bot.reply_to(message, "Отправьте команду, и я помогу вам с информацией по ней.")
+    bot.reply_to(message, "Відправте команду, та я допомогу вам с інфоромацієй по ній.")
 
 
-
-
+# Raises error for bad responses
 def get_crypto_rate(coin_id='bitcoin', currency='usd'):
     url = f'https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies={currency}'
     try:
         response = requests.get(url)
-        response.raise_for_status()  # Raises error for bad responses
+        response.raise_for_status()
         data = response.json()
         rate = data.get(coin_id, {}).get(currency, 'No data')
         return rate
     except requests.RequestException as e:
-        return f"Ошибка: {str(e)}"
+        return f"Помилка: {str(e)}"
 
 
 # Response on "rate" menu item - choose the crypto
@@ -74,7 +73,7 @@ def handle_rate(message):
     cryptos = ['Bitcoin', 'Ethereum', 'Ripple', 'Litecoin']
     for crypto in cryptos:
         markup.add(types.InlineKeyboardButton(text=crypto, callback_data=f'crypto_{crypto.lower()}'))
-    bot.send_message(message.chat.id, "Выберите криптовалюту:", reply_markup=markup)
+    bot.send_message(message.chat.id, "Оберіть криптовалюту:", reply_markup=markup)
 
 
 # Response on "rate" menu item - choose the currency
@@ -85,7 +84,7 @@ def handle_crypto_choice(call):
     currencies = ['USD', 'EUR', 'CHF', 'UAH']
     for currency in currencies:
         markup.add(types.InlineKeyboardButton(text=currency, callback_data=f'rate_{crypto}_{currency.lower()}'))
-    bot.edit_message_text("Теперь выберите валюту:", chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup)
+    bot.edit_message_text("Зараз оберіть валюту:", chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup)
 
 
 # Show the rate
@@ -112,74 +111,77 @@ user_data = {}
 @bot.message_handler(commands=['add_contact'])
 def handle_add_contact(message):
     user_data[message.from_user.id] = {}
-    bot.reply_to(message, "Введите имя контакта:")
+    bot.reply_to(message, "Введить імʼя контакта:")
     bot.register_next_step_handler(message, ask_name, message.from_user.id)
 
 
 # Name request
 def ask_name(message, user_id):
     if not message.text.isalpha():
-        bot.reply_to(message, "Имя должно содержать только буквы. Пожалуйста, введите имя еще раз:")
+        bot.reply_to(message, "Имʼя має складатись лише з букв. Будь ласка, введить имʼя ще раз:")
         return bot.register_next_step_handler(message, ask_name, user_id)
     user_data[user_id]['name'] = message.text
-    bot.reply_to(message, "Введите номер телефона:")
+    bot.reply_to(message, "Введить номер телефона:")
     bot.register_next_step_handler(message, ask_phone, user_id)
 
 
 # Phone number request
 def ask_phone(message, user_id):
     if not message.text.isdigit() or len(message.text) != 10:
-        bot.reply_to(message, "Номер телефона должен содержать 10 цифр. Пожалуйста, введите номер телефона еще раз:")
+        bot.reply_to(message, "Номер телефона має складатись з 10 цифр. Будь ласка, введить номер телефона ще раз:")
         return bot.register_next_step_handler(message, ask_phone, user_id)
     user_data[user_id]['phone'] = message.text
-    bot.reply_to(message, "Введите email:")
+    bot.reply_to(message, "Введить email:")
     bot.register_next_step_handler(message, ask_email, user_id)
 
 
 # Email request
 def ask_email(message, user_id):
     if "@" not in message.text and "." not in message.text:
-        bot.reply_to(message, "Введите корректный email. Пожалуйста, введите email еще раз:")
+        bot.reply_to(message, "Введить корректний email. Будь ласка, введить email ще раз:")
         return bot.register_next_step_handler(message, ask_email, user_id)
     user_data[user_id]['email'] = message.text
     # Add contact from user_data for the user_id
     add_contact(user_data[user_id]['name'], user_data[user_id]['phone'], user_data[user_id]['email'], conn)
-    bot.reply_to(message, "Контакт добавлен.")
+    bot.reply_to(message, "Контакт додан.")
     # Clear data
     del user_data[user_id]
 
 
+# contact preview
 @bot.message_handler(commands=['view_contacts'])
 def handle_view_contacts(message):
-    logger.info(f"Пользователь {message.from_user.id} запросил просмотр контактов")
+    logger.info(f"Користувач {message.from_user.id} запросив перегляд контактів")
     try:
         contacts = get_contacts(conn)
         if not contacts:
-            bot.reply_to(message, "Список контактов пуст.")
+            bot.reply_to(message, "Список контактів пуст.")
         else:
             response = "\n".join(f"{id} - {name}, {phone}, {email}" for id, name, phone, email in contacts)
             bot.reply_to(message, response)
     except Exception as e:
-        logger.error("Ошибка при получении контактов: %s", e)
-        bot.reply_to(message, "Не удалось получить список контактов.")
+        logger.error("Помилка при вилучені контактів: %s", e)
+        bot.reply_to(message, "Не вдалось отримати список контактів.")
 
 
+# contact delete
 @bot.message_handler(commands=['delete_contact'])
 def handle_delete_contact(message):
-    logger.info(f"Пользователь {message.from_user.id} запросил удаление контакта")
-    bot.reply_to(message, "Введите ID контакта, который хотите удалить:")
+    logger.info(f"Користувач {message.from_user.id} запросив видалення контакта")
+    bot.reply_to(message, "Введить ID контакта, який хотіли видалити:")
     bot.register_next_step_handler(message, perform_contact_deletion)
+
 
 def perform_contact_deletion(message):
     try:
-        contact_id = int(message.text)  # Преобразование текста в число
+        contact_id = int(message.text)  # id into integer
         delete_contact(contact_id, conn)
-        bot.reply_to(message, "Контакт удалён.")
+        bot.reply_to(message, "Контакт идалено.")
     except ValueError:
-        bot.reply_to(message, "ID должен быть числом. Попробуйте еще раз.")
+        bot.reply_to(message, "ID має бути числом. Спробуйте ще раз.")
     except Exception as e:
-        logger.error("Ошибка при удалении контакта: %s", e)
-        bot.reply_to(message, "Не удалось удалить контакт.")
+        logger.error("Помилка при видалені контакта: %s", e)
+        bot.reply_to(message, "Не вдалось видалити контакт.")
 
 
 bot.infinity_polling()
