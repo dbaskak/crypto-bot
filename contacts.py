@@ -10,16 +10,18 @@ def connect_db():
     )
 
 
-def add_contact(name, phone, email, conn):
+def add_contact(user_id, name, phone, email, conn):
     with conn.cursor() as cursor:
-        cursor.execute("INSERT INTO contacts (name, phone, email) VALUES (%s, %s, %s)",
-                       (name, phone, email))
+        cursor.execute(
+            "INSERT INTO contacts (user_id, name, phone, email) VALUES (%s, %s, %s, %s)",
+            (user_id, name, phone, email)
+        )
         conn.commit()
 
 
-def get_contacts(conn):
+def get_contacts(user_id, conn):
     with conn.cursor() as cursor:
-        cursor.execute("SELECT id, name, phone, email FROM contacts")
+        cursor.execute("SELECT id, name, phone, email FROM contacts WHERE user_id = %s", (user_id,))
         return cursor.fetchall()
 
 
