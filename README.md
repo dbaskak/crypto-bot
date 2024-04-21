@@ -36,4 +36,17 @@ Crypto Bot — це чат-бот для Telegram, який дозволяє к�
 /delete_contact - видалення контакту
 /help - Отримати довідку по командам
 
+### Скріншоти та демо
+Демо версію проекту можна переглянути тут:
+https://dbaskak.github.io/crypto-bot/
+
+![image](https://github.com/dbaskak/crypto-bot/assets/79998331/d874bbe8-b99b-4a8b-a82b-5e9f93384efa)
+![image](https://github.com/dbaskak/crypto-bot/assets/79998331/4c7de032-fd2f-40b1-9969-83e284bdc7cf)
+
+### Автор:
+dbaskak
+
+
+
+
 
