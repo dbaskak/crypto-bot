@@ -10,7 +10,10 @@ def connect_db():
     )
 
 
-def add_contact(user_id, name, phone, email, conn):
+def add_contact(user_id, conn, **kwargs):
+    name = kwargs.get('name')
+    phone = kwargs.get('phone')
+    email = kwargs.get('email')
     with conn.cursor() as cursor:
         cursor.execute(
             "INSERT INTO contacts (user_id, name, phone, email) VALUES (%s, %s, %s, %s)",

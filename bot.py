@@ -110,78 +110,87 @@ user_data = {}
 # User add
 @bot.message_handler(commands=['add_contact'])
 def handle_add_contact(message):
-    user_data[message.from_user.id] = {}
-    bot.reply_to(message, "Введить імʼя контакта:")
-    bot.register_next_step_handler(message, ask_name, message.from_user.id)
+    logger.info(f"Користувач {message.from_user.id} запросив додавання нового контакта")
+    bot.reply_to(message, "Введіть ім'я контакта:")
+    bot.register_next_step_handler(message, ask_contact_name, message.from_user.id)
 
 
-# Name request
-def ask_name(message, user_id):
-    if not message.text.isalpha():
-        bot.reply_to(message, "Имʼя має складатись лише з букв. Будь ласка, введить имʼя ще раз:")
-        return bot.register_next_step_handler(message, ask_name, user_id)
-    user_data[user_id]['name'] = message.text
-    bot.reply_to(message, "Введить номер телефона:")
-    bot.register_next_step_handler(message, ask_phone, user_id)
+def ask_contact_name(message, user_id):
+    user_data[message.from_user.id] = {'name': message.text}
+    bot.reply_to(message, "Введіть номер телефону контакта:")
+    bot.register_next_step_handler(message, ask_contact_phone, user_id)
 
 
-# Phone number request
-def ask_phone(message, user_id):
-    if not message.text.isdigit() or len(message.text) != 10:
-        bot.reply_to(message, "Номер телефона має складатись з 10 цифр. Будь ласка, введить номер телефона ще раз:")
-        return bot.register_next_step_handler(message, ask_phone, user_id)
-    user_data[user_id]['phone'] = message.text
-    bot.reply_to(message, "Введить email:")
-    bot.register_next_step_handler(message, ask_email, user_id)
+def ask_contact_phone(message, user_id):
+    user_data[message.from_user.id]['phone'] = message.text
+    bot.reply_to(message, "Введіть email контакта:")
+    bot.register_next_step_handler(message, ask_contact_email, user_id)
 
 
-# Email request
-def ask_email(message, user_id):
-    if "@" not in message.text and "." not in message.text:
-        bot.reply_to(message, "Введить корректний email. Будь ласка, введить email ще раз:")
-        return bot.register_next_step_handler(message, ask_email, user_id)
-    user_data[user_id]['email'] = message.text
-    # Add contact from user_data for the user_id
-    add_contact(user_data[user_id]['name'], user_data[user_id]['phone'], user_data[user_id]['email'], conn)
-    bot.reply_to(message, "Контакт додан.")
-    # Clear data
-    del user_data[user_id]
+def ask_contact_email(message, user_id):
+    user_data[message.from_user.id]['email'] = message.text
+    conn = connect_db()
+    try:
+        add_contact(
+            user_id,
+            conn,
+            name=user_data[message.from_user.id]['name'],
+            phone=user_data[message.from_user.id]['phone'],
+            email=user_data[message.from_user.id]['email']
+        )
+        bot.reply_to(message, "Контакт додано.")
+    except Exception as e:
+        logger.error("Помилка при додаванні контакта: %s", e)
+        bot.reply_to(message, "Не вдалось додати контакт.")
+    finally:
+        del user_data[message.from_user.id]
+        conn.close()
+
 
 
 # contact preview
 @bot.message_handler(commands=['view_contacts'])
 def handle_view_contacts(message):
-    logger.info(f"Користувач {message.from_user.id} запросив перегляд контактів")
+    user_id = message.from_user.id
+    logger.info(f"Користувач {user_id} запросив перегляд контактів")
+    conn = connect_db()  # bd connect
     try:
-        contacts = get_contacts(conn)
+        contacts = get_contacts(user_id, conn)
         if not contacts:
-            bot.reply_to(message, "Список контактів пуст.")
+            bot.reply_to(message, "Список контактів порожній.")
         else:
             response = "\n".join(f"{id} - {name}, {phone}, {email}" for id, name, phone, email in contacts)
             bot.reply_to(message, response)
     except Exception as e:
         logger.error("Помилка при вилучені контактів: %s", e)
         bot.reply_to(message, "Не вдалось отримати список контактів.")
+    finally:
+        conn.close()  # bd disconnect
 
 
 # contact delete
 @bot.message_handler(commands=['delete_contact'])
 def handle_delete_contact(message):
     logger.info(f"Користувач {message.from_user.id} запросив видалення контакта")
-    bot.reply_to(message, "Введить ID контакта, який хотіли видалити:")
-    bot.register_next_step_handler(message, perform_contact_deletion)
+    bot.reply_to(message, "Введіть ID контакта, який хочете видалити:")
+    bot.register_next_step_handler(message, perform_contact_deletion, message.from_user.id)
 
 
-def perform_contact_deletion(message):
+def perform_contact_deletion(message, user_id):
+    conn = connect_db()
     try:
-        contact_id = int(message.text)  # id into integer
-        delete_contact(contact_id, conn)
-        bot.reply_to(message, "Контакт идалено.")
+        contact_id = int(message.text)
+        if delete_contact(contact_id, user_id):
+            bot.reply_to(message, "Контакт видалено.")
+        else:
+            bot.reply_to(message, "Контакт не знайдено або не належить вам.")
     except ValueError:
         bot.reply_to(message, "ID має бути числом. Спробуйте ще раз.")
     except Exception as e:
-        logger.error("Помилка при видалені контакта: %s", e)
+        logger.error("Помилка при видаленні контакта: %s", e)
         bot.reply_to(message, "Не вдалось видалити контакт.")
+    finally:
+        conn.close()
 
 
 bot.infinity_polling()
